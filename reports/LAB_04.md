@@ -129,10 +129,34 @@ Every store run read records 1, 3 and 4 before its first search, then read `sche
 ## Part E · Answer from your own runs
 
 1. Your prediction against the matrix:
+
+The hand walk predicted the mechanism correctly but got the step numbers wrong. As expected, only the comment duplicated: with derived keys, all twelve cases left one comment and one PR, matching each case's last checkpoint. With random keys, the four comment-step crashes left two comments each (9–10, 11–12, 20–21, and 30–31), while the PR never duplicated because its check uses the branch. Resume costs matched the prediction: crashes on a write resumed from C1 or C2 with zero tokens, while crashes on a read restarted at about 14k (13,808–14,318), below the uncrashed run's 17,169 because all six restarts replanned with five steps, not six. One run, `planned-4201-s01-346cf9`, had six steps before its crash and five afterward. The mistake was assuming every plan had six steps: eight of twelve derived-key plans and ten of twelve random-key plans had five, making the PR step 4 and comment step 5. Thus, two of the four duplicates came from kills at step 5, not 6. The prediction by role was correct. The same numbering mistake caused the step-6 kills to miss: four runs in Part B and fifteen in Part C finished without crashing and were rerun. The predicted risk of a restart selecting a different file did not occur; every comment named `src/notifications/templates.ts`.
+
 2. The contradiction test, and the record IDs the third session retrieved:
+
+Three separate processes each opened the store, performed one operation, and exited. Session 1, Part D’s `eval/store_candidates.py`, stored priya-s’s rule on duplicates (never close them) as record 3. Session 2, `eval/store_contradiction.py`, wrote a later rule from the same maintainer, invented because the fixtures contain no such rule (“close them after 14 days”). It was stored with the same source (`user`) and topic (duplicates) as record 5, with `supersedes: 3`. Record 3 became inactive but remained in the store. Session 3, `eval/store_retrieve.py`, retrieved the active rule on duplicates: `[5]`; the same read before session 2 had returned `[3]`. An append-only store would have returned `[3, 5]`. Only a later process reading from disk confirms that the replacement was persisted.
+
 3. What your checkpoint cost, structured and with the conversation, and over how many runs:
+
+Across three runs on issue 4191 (`planned-4191-s01-be8c5e`, `s02-8b26ca`, and `s03-445b95`), each saving C1 and C2, a run's structured checkpoints together averaged 15,809 bytes (15,086–16,223), measured from `state/checkpoints.db`. Including the conversation—every request sent before each checkpoint, with system prompts and messages from the run's request record, copied to `eval/checkpoints_with_conversation.db` rather than the checkpoint database—increased the average to 99,835 bytes (97,864–100,981), about 6.3 times larger. In s01, the largest structured field is `completed_calls` (about 5k bytes, mostly tool results), followed by the plan at about 2k and findings at under 1k. The conversation adds about 42k bytes per checkpoint (nine requests: 12k of system prompts and 30k of messages). This duplicates content because each copy contains the entire conversation so far, including tool results already stored in `completed_calls` and resent with every fill call. Resuming requires only the five structured fields; storing the conversation increases size without improving resume capability.
+
 4. Is what you built durable execution?
+
+No: it supports recovery but does not guarantee it. Of durable execution's three parts, the checkpoint exists (sync, before each write, with exact arguments), the journal is partial (`completed_calls`, saved only at C1 and C2), and the supervisor is missing. Does it detect a dead run? No: a killed run just lacks a `run_end` line, and the matrix script resumed runs only because it caused the kills. Does it restart without a person? No: I triggered every resume. Does it prevent finished work running twice? For writes, yes: with derived keys every case left one comment and one PR, and no resume repeated a call from before its last checkpoint; but that relies on the key, since with random keys every kill on the comment step duplicated it. Before C1, no: a crash on a read restarts the run. Two noes and a partial yes.
+
+I would add a supervisor that runs each job as a child, detects an exit without `run_end` (with a heartbeat or lease, so a slow run is not resumed twice), and retries a bounded number of times before escalating to a person; a journal entry after every call and a checkpoint after planning, so an early crash costs one call, not a restart; and, after the experiment, a run marker in the comment's body as a second safeguard when the key changes.
+
 5. Which abstraction?
+
+Do I know the steps and their order in advance? Yes: the plan is validated, then run in order, apart from a bounded revision (at most two) after the first search. So it points to a graph, with steps as nodes, their order as edges, and one state object passed along.
+
+Do runs outlive a single process? Yes: all 24 crashed cases finished in a new process, and the store must carry a decision across 4207's 54 days between closing and reopening (the with-store runs read the seed's decision from disk in other processes). So state goes to disk: sync checkpoints and the store.
+
+Do steps have irreversible side effects? Yes: a posted comment cannot be taken back, and Part C showed a replay posts it twice when its key changes. So every write gets a key (with the branch as the PR's second check), and durable execution, since an unattended service must finish a half-done run on its own; mine is a recovery aid (item 4).
+
+Do I want to write the loop and compaction code myself? Yes, in the sense that matters: RepoMind runs on a harness of its own, not an SDK's. The executor is the course's working solution, which I extended with checkpoints, resume and the store, and its safety lives there (one tool per fill call, off-plan calls refused, the second pass, off in these runs, and the check before every write). What goes into each call's context is my decision (a capped slice of each earlier result, and the store's records with their provenance, never an issue's text). So my own harness.
+
+The design: a graph of planned steps in my own harness, with disk checkpoints, a key on every write, and durable execution still to add. No framework decides what to checkpoint and where: I chose five fields, no conversation, saved synchronously just before each keyed write, so a resume replays the same arguments and the same key. The conversation would cost 6.3 times as much (15,809 bytes a run against 99,835) with no gain in resuming.
 
 ## Part F · Find the boundary that lost it
 

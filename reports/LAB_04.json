@@ -264,11 +264,11 @@
   }
 },
   "checkpoint_bytes": {
-    "structured": null,
-    "with_conversation": null,
-    "runs": 0
+    "structured": 15809,
+    "with_conversation": 99835,
+    "runs": 3
   },
-  "contradiction_test": [],
+  "contradiction_test": [5],
   "forgetting": {
     "attention": {
       "fact": null,
