@@ -125,8 +125,10 @@ def run_case(step, when, mode, backend, saved):
         print(f"  the kill did not fire (exit {kill.returncode}): run this case again\n{out[-500:]}")
         return None
     run_id = found.group(1)
-    resume = subprocess.run([sys.executable, "run.py", "--resume", run_id] + extra, cwd=ROOT, env=env,
-                            capture_output=True, text=True)
+    resume_env = dict(env)
+    resume_env.pop("KEY_MODE", None)
+    resume = subprocess.run([sys.executable, "run.py", "--resume", run_id] + extra, cwd=ROOT,
+                            env=resume_env, capture_output=True, text=True)
     out = resume.stdout + resume.stderr
     if resume.returncode != 0 or "ERROR" in out:
         print(f"  {run_id}: the resume failed (exit {resume.returncode}); resume it by hand, then record it "

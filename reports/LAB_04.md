@@ -68,10 +68,31 @@ Every case left exactly one comment on issue 4201 and one open PR from `repomind
 
 ## Part C · Break it on purpose
 
-| Step | When | run_id | Comments | Comment IDs | Open PRs |
-|---|---|---|---|---|---|
+| Step | When | run_id | Kill landed on | Plan steps | Comments | Comment IDs | Open PRs |
+|---|---|---|---|---|---|---|---|
+| 1 | after | planned-4201-s01-c2f40b | issues_read | 5 | 1 | 1 | 1 |
+| 1 | during | planned-4201-s01-c0d6c8 | issues_read | 5 | 1 | 2 | 1 |
+| 2 | after | planned-4201-s01-9db44f | code_search | 5 | 1 | 3 | 1 |
+| 2 | during | planned-4201-s01-dee5a1 | code_search | 5 | 1 | 4 | 1 |
+| 3 | after | planned-4201-s01-47be69 | code_read_file | 5 | 1 | 5 | 1 |
+| 3 | during | planned-4201-s01-9e357e | code_read_file | 5 | 1 | 6 | 1 |
+| 4 | after | planned-4201-s01-2b04f6 | pulls_open | 5 | 1 | 7 | 1 |
+| 4 | during | planned-4201-s01-5f5262 | pulls_open | 5 | 1 | 8 | 1 |
+| 5 | after | planned-4201-s01-0d4348 | issues_comment | 5 | **2** | **9, 10** | 1 |
+| 5 | during | planned-4201-s01-98a8a7 | issues_comment | 5 | **2** | **11, 12** | 1 |
+| 6 | after | planned-4201-s01-d117a1 | issues_comment | 6 | **2** | **20, 21** | 1 |
+| 6 | during | planned-4201-s01-e9c32e | issues_comment | 6 | **2** | **30, 31** | 1 |
+
+After running `make reset`, I set `KEY_MODE=uuid` for each crashed run and resumed using the plain `--resume` command. Both the original runs and their resumed runs used `key_mode: uuid`, as confirmed by their `run_start` and `resume` log entries. Ten of the twelve crashed runs planned five steps, meaning step 5 was the comment operation in those cases. A kill at step 6 only occurs when the plan contains six steps, so the step-6 cases were rerun until a run was successfully interrupted. Fifteen attempts completed without a crash and were excluded from the results: six attempts for the after-step-6 cases (`planned-4201-s01-73e907`, `-e76445`, `-9a6cea`, `-cc7823`, `-67e946`, and `-151f6d`) and nine attempts for the during-step-6 cases (`planned-4201-s01-75aca5`, `-611ab2`, `-f9b725`, `-6ca450`, `-4f9a5e`, `-0dc815`, `-3dcecf`, `-e319d5`, and `-4dae68`).
+
+**Which N produced a second comment, counted from the tracker**
+
+The values of N that produced a second comment, counted from the tracker by run_id (`Tracker().comments(run_id, 4201)` and `Tracker().prs(run_id, branch="repomind/issue-4201")`), were 5 and 6, and this occurred only when the kill landed on the comment step, after or during it. For five-step plans (N = 5), `planned-4201-s01-0d4348` (after) produced comments 9 and 10, while `planned-4201-s01-98a8a7` (during) produced comments 11 and 12. For six-step plans (N = 6), `planned-4201-s01-d117a1` (after) produced comments 20 and 21, while `planned-4201-s01-e9c32e` (during) produced comments 30 and 31. Each pair had identical comment bodies but different keys, as shown by `e56052a0…` and `7063baff…` for `0d4348`. Every crash at an earlier step (steps 1–4) resulted in exactly one comment that matched the run's findings.
+
+No case produced a second PR: all twelve cases left exactly one open PR from `repomind/issue-4201`. When the PR operation was interrupted (N = 4, during or after on five-step plans), the replay used a new random key. However, Assignment 3's check before execute for `open_pr` searches by branch, and because the branch is fixed in the code, it found the existing open PR and prevented a duplicate. For `planned-4201-s01-2b04f6` (after), PR 7 was created with key `c17c0954…`, while the replay used `079b6f57…` and returned `already there: pr-7`. Similarly, for `planned-4201-s01-5f5262` (during), PR 8 was created with key `7de53166…`, while the replay used `dcc25c47…` and returned `already there: pr-8`. In contrast, the comment operation checks only by key. Since the replay generates a new random key, the check cannot find the existing comment, and a second comment is posted.
 
 What the checkpoint did, and what the key did:
+Both matrices crashed at the same steps and resumed from the same checkpoints, C1 before the PR and C2 before the comment. No resumed run repeated a call completed before its last checkpoint. The checkpoint determined where replay started and how much work ran again: crashes on a write required no model calls (0 tokens, compared with about 14k for crashes on a read) and reused the saved arguments. However, C2 is saved before the comment is sent, so it cannot confirm whether the comment was posted, and the comment is replayed. The key determined whether this created a duplicate. With derived keys, the comment-step crashes (`1b3aae`, `f39606`, `1fe0f0`) each left one comment because the replayed key matched. With random keys, all four comment-step crashes left two comments (9 and 10, 11 and 12, 20 and 21, 30 and 31) because the new key matched nothing. The PR never duplicated in either matrix because its check searches by branch, not by key. Therefore, the key, not the checkpoint, prevents duplicate writes, while the checkpoint preserves the arguments needed to reproduce the same key and avoids restarting the run.
 
 ## Part D · A memory that can say where it came from
 

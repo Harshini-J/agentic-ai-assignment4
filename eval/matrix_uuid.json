@@ -1,0 +1,170 @@
+{
+  "cases": {
+    "1:after": {
+      "run_id": "planned-4201-s01-c2f40b",
+      "step": 1,
+      "when": "after",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    "1:during": {
+      "run_id": "planned-4201-s01-c0d6c8",
+      "step": 1,
+      "when": "during",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    "2:after": {
+      "run_id": "planned-4201-s01-9db44f",
+      "step": 2,
+      "when": "after",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    "2:during": {
+      "run_id": "planned-4201-s01-dee5a1",
+      "step": 2,
+      "when": "during",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    "3:after": {
+      "run_id": "planned-4201-s01-47be69",
+      "step": 3,
+      "when": "after",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    "3:during": {
+      "run_id": "planned-4201-s01-9e357e",
+      "step": 3,
+      "when": "during",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    "4:after": {
+      "run_id": "planned-4201-s01-2b04f6",
+      "step": 4,
+      "when": "after",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    "4:during": {
+      "run_id": "planned-4201-s01-5f5262",
+      "step": 4,
+      "when": "during",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    "5:after": {
+      "run_id": "planned-4201-s01-0d4348",
+      "step": 5,
+      "when": "after",
+      "comments": 2,
+      "open_prs": 1,
+      "matches": false
+    },
+    "5:during": {
+      "run_id": "planned-4201-s01-98a8a7",
+      "step": 5,
+      "when": "during",
+      "comments": 2,
+      "open_prs": 1,
+      "matches": false
+    },
+    "6:after": {
+      "run_id": "planned-4201-s01-d117a1",
+      "step": 6,
+      "when": "after",
+      "comments": 2,
+      "open_prs": 1,
+      "matches": false
+    },
+    "6:during": {
+      "run_id": "planned-4201-s01-e9c32e",
+      "step": 6,
+      "when": "during",
+      "comments": 2,
+      "open_prs": 1,
+      "matches": false
+    }
+  },
+  "comment_ids": {
+    "planned-4201-s01-c2f40b": [
+      1
+    ],
+    "planned-4201-s01-c0d6c8": [
+      2
+    ],
+    "planned-4201-s01-9db44f": [
+      3
+    ],
+    "planned-4201-s01-dee5a1": [
+      4
+    ],
+    "planned-4201-s01-47be69": [
+      5
+    ],
+    "planned-4201-s01-9e357e": [
+      6
+    ],
+    "planned-4201-s01-2b04f6": [
+      7
+    ],
+    "planned-4201-s01-5f5262": [
+      8
+    ],
+    "planned-4201-s01-0d4348": [
+      9,
+      10
+    ],
+    "planned-4201-s01-98a8a7": [
+      11,
+      12
+    ],
+    "planned-4201-s01-d117a1": [
+      20,
+      21
+    ],
+    "planned-4201-s01-e9c32e": [
+      30,
+      31
+    ]
+  },
+  "repeated": {
+    "planned-4201-s01-c2f40b": 0,
+    "planned-4201-s01-c0d6c8": 0,
+    "planned-4201-s01-9db44f": 0,
+    "planned-4201-s01-dee5a1": 0,
+    "planned-4201-s01-47be69": 0,
+    "planned-4201-s01-9e357e": 0,
+    "planned-4201-s01-2b04f6": 0,
+    "planned-4201-s01-5f5262": 0,
+    "planned-4201-s01-0d4348": 0,
+    "planned-4201-s01-98a8a7": 0,
+    "planned-4201-s01-d117a1": 0,
+    "planned-4201-s01-e9c32e": 0
+  },
+  "plan_steps": {
+    "planned-4201-s01-c2f40b": 5,
+    "planned-4201-s01-c0d6c8": 5,
+    "planned-4201-s01-9db44f": 5,
+    "planned-4201-s01-dee5a1": 5,
+    "planned-4201-s01-47be69": 5,
+    "planned-4201-s01-9e357e": 5,
+    "planned-4201-s01-2b04f6": 5,
+    "planned-4201-s01-5f5262": 5,
+    "planned-4201-s01-0d4348": 5,
+    "planned-4201-s01-98a8a7": 5,
+    "planned-4201-s01-d117a1": 6,
+    "planned-4201-s01-e9c32e": 6
+  }
+}
