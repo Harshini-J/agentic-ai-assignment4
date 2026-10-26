@@ -1,7 +1,14 @@
 {
-  "plan_marks": [],
-  "durability": null,
-  "uncrashed_run_id": null,
+  "plan_marks": [
+  {"step": 1, "kind": "read",        "checkpoint": "none"},
+  {"step": 2, "kind": "read",        "checkpoint": "none"},
+  {"step": 3, "kind": "read",        "checkpoint": "none"},
+  {"step": 4, "kind": "read",        "checkpoint": "none"},
+  {"step": 5, "kind": "keyed_write", "checkpoint": "before"},
+  {"step": 6, "kind": "keyed_write", "checkpoint": "before"}
+],
+  "durability": "sync",
+  "uncrashed_run_id": "planned-4201-s01-6407ec",
   "matrix_derived": [],
   "matrix_uuid": [],
   "duplicate_comment_ids": {},

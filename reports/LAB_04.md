@@ -4,15 +4,19 @@ Model: <vendor and model>, the same for every run.
 
 ## Part A · Mark the plan, place the checkpoints
 
+
 | Step | Tool | Kind | Checkpoint |
 |---|---|---|---|
 | 1 | issues_read | read | none |
 | 2 | code_search | read | none |
-| 3 | code_read_file | read | none |
-| 4 | pulls_open | keyed write | before (C1) |
-| 5 | issues_comment | keyed write | before (C2) |
+| 3 | code_search | read | none |
+| 4 | code_read_file | read | none |
+| 5 | pulls_open | keyed write | before (C1) |
+| 6 | issues_comment | keyed write | before (C2) |
 
-Checkpoints are placed according to the type of each step rather than at fixed time intervals. Each write has a sync checkpoint immediately before execution: C1 before the PR creation (step 4) and C2 before the comment creation (step 5). Each checkpoint stores the exact arguments that will be sent to the write operation. Since the key is generated from these model-provided arguments, replay is safe only when the same arguments are used, and they must be saved to disk before the write executes. This design ensures that at most one write operation, the currently running one, is within the replay window. The three read operations do not require checkpoints because they are local, have no side effects, and can safely be repeated. As a result, a crash before C1 costs only a new plan and two fill calls (model calls). The resumed run may select a different file, which is acceptable. Overall, checkpoint placement limits the replay window to the currently executing step. However, whether a write killed during its own step actually happened must be determined using its key and, for the PR operation, its branch, rather than the checkpoint itself.
+The plan is the uncrashed run's (`planned-4201-s01-6407ec`): the model planned two searches, for a key term and an alternate one, so it has six steps.
+
+Checkpoints are placed according to the type of each step rather than at fixed time intervals. Each write has a sync checkpoint immediately before execution: C1 before the PR creation (step 5) and C2 before the comment creation (step 6). Each checkpoint stores the exact arguments that will be sent to the write operation. Since the key is generated from these model-provided arguments, replay is safe only when the same arguments are used, and they must be saved to disk before the write executes. This design ensures that at most one write operation, the currently running one, is within the replay window. The four read operations do not require checkpoints because they are local, have no side effects, and can safely be repeated. As a result, a crash before C1 costs only a new plan and three fill calls (model calls). The resumed run may select a different file, which is acceptable. Overall, checkpoint placement limits the replay window to the currently executing step. However, whether a write killed during its own step actually happened must be determined using its key and, for the PR operation, its branch, rather than the checkpoint itself.
 
 - Durability mode, and why: **sync**
 
@@ -26,21 +30,22 @@ The comment is the weaker of the two writes. It has one defence against duplicat
 
 ## Part B · Kill it at every step
 
-**The hand walk, written before the matrix.** 
+**The hand walk, written before the matrix.** The uncrashed run (`planned-4201-s01-6407ec`) planned six steps: read the issue, two searches, read a file, open the PR, post the comment.
 
-**The crash I expect to be worst is `--die-during-step 5`** (`--die-after-step 5` replays the same way, from C2). The comment is committed to the tracker, but the process dies before receiving the reply, so the comment has been posted and RepoMind does not know whether it succeeded. This is the worst case because the comment is an irreversible write and its key is its only protection against duplication (Part A). Crashes at steps 1 to 3 require more of the run to be repeated, including the plan, but all those steps are reads.
+**The crash I expect to be worst is `--die-during-step 6`** (`--die-after-step 6` replays the same way, from C2). The comment is committed to the tracker, but the process dies before receiving the reply, so the comment has been posted and RepoMind does not know whether it succeeded. This is the worst case because the comment is an irreversible write and its key is its only protection against duplication (Part A). Crashes at steps 1 to 4 require more of the run to be repeated, including the plan, but all those steps are reads.
 
-- **Last checkpoint:** C2, saved in sync mode immediately before step 5. It contains the plan, steps 1 to 4 completed and step 5 running, the completed calls for steps 1 to 4 (including the PR's key), and the findings: label, file, and the comment's exact arguments.
-- **Steps between the checkpoint and the crash, and the step running at the crash:** There are no steps between C2 and the crash because C2 is immediately before step 5. Step 5, the comment operation, is running when the crash occurs. The comment has already been committed, but its outcome is unknown to the process.
-- **Side effects, and what closes each (a key, a recorded result, or nothing):** Steps 1 to 3 are reads with no side effects, closed by a recorded result: they are skipped and their saved results reused during resume. Step 4, the PR operation, has a side effect but is already completed, closed by a recorded result: it is in `completed_calls` with its key, so it is not replayed. Step 5, the comment operation, has an irreversible side effect, and only its key closes it. When the run resumes, it replays the comment using the exact arguments saved in C2, producing the same derived key. The registry's check before execute then finds the existing comment by that key and does not post another one. There is no branch-based or other safeguard for the comment.
+- **Last checkpoint:** C2, saved in sync mode immediately before step 6. It contains the plan, steps 1 to 5 completed and step 6 running, the completed calls for steps 1 to 5 (including the PR's key), and the findings: label, file, and the comment's exact arguments.
+- **Steps between the checkpoint and the crash, and the step running at the crash:** There are no steps between C2 and the crash because C2 is immediately before step 6. Step 6, the comment operation, is running when the crash occurs. The comment has already been committed, but its outcome is unknown to the process.
+- **Side effects, and what closes each (a key, a recorded result, or nothing):** Steps 1 to 4 are reads with no side effects, closed by a recorded result: they are skipped and their saved results reused during resume. Step 5, the PR operation, has a side effect but is already completed, closed by a recorded result: it is in `completed_calls` with its key, so it is not replayed. Step 6, the comment operation, has an irreversible side effect, and only its key closes it. When the run resumes, it replays the comment using the exact arguments saved in C2, producing the same derived key. The registry's check before execute then finds the existing comment by that key and does not post another one. There is no branch-based or other safeguard for the comment.
 
-**The cost of early crashes:** A crash at steps 1 to 3 leaves no checkpoint to resume from, so the run starts over with the same `run_id`. It generates a new plan, repeats the reads, and creates a new draft. This costs approximately another full run's worth of tokens, and the model may choose a different label or file. This is not considered a failure as long as the comment matches the findings in its own last checkpoint.
+**The cost of early crashes:** A crash at steps 1 to 4 leaves no checkpoint to resume from, so the run starts over with the same `run_id`. It generates a new plan, repeats the reads, and creates a new draft. This costs approximately another full run's worth of tokens, and the model may choose a different label or file. This is not considered a failure as long as the comment matches the findings in its own last checkpoint.
 
 **Predictions:**
-- **Crash at step 5 with derived keys:** One comment and one PR, with no model calls during resume.
-- **Crash at step 5 with random keys (Part C):** Two comments and one PR, because the replay uses a new key that cannot match the existing comment. The PR is not replayed.
-- **Entire matrix with derived keys:** Exactly one comment in all ten cases, one PR exactly when the findings name a file and none when they say none, and each comment matches the label and file recorded in its own last checkpoint.
-- **Entire matrix with random keys:** Duplicate comments occur only for crashes during or after step 5. At step 4, the PR is replayed with a new key, but the branch-based check finds the existing open PR and prevents a duplicate. The comment is then posted once. For crashes at steps 1 to 3, no write has occurred before the crash, so the restarted run posts the comment only once.
+- **Crash at step 6 with derived keys:** One comment and one PR, with no model calls during resume.
+- **Crash at step 6 with random keys (Part C):** Two comments and one PR, because the replay uses a new key that cannot match the existing comment. The PR is not replayed.
+- **Entire matrix with derived keys:** Exactly one comment in all twelve cases, one PR exactly when the findings name a file and none when they say none, and each comment matches the label and file recorded in its own last checkpoint.
+- **Entire matrix with random keys:** Duplicate comments occur only for crashes during or after step 6. At step 5, the PR is replayed with a new key, but the branch-based check finds the existing open PR and prevents a duplicate. The comment is then posted once. For crashes at steps 1 to 4, no write has occurred before the crash, so the restarted run posts the comment only once.
+- **Plans may differ:** A crashed run's model may plan five steps (one search) instead of six; then step 5 is the comment in that run, and a kill at step 6 does not fire and is run again.
 
 **The matrix, derived keys.** Uncrashed run:
 
