@@ -59,7 +59,8 @@ from agent.validator import validate
 from harness.formats import FILL, format_triage_comment, parse_triage_comment, result_paths
 from harness.roles import arg, tool_for
 from harness.schema import errors as schema_errors
-from tools import Unverifiable
+from tools import ToolResult, Unverifiable
+from state.checkpointer import Checkpointer
 
 MAX_REPLANS = 2       # three planner calls in all; a fourth on the same request is the same coin, so a person looks
 MAX_REVISIONS = 2     # a repair of the first search, and one more if the repair also finds nothing
@@ -68,6 +69,7 @@ MAX_FILL_TRIES = 2    # a step the model will not fill on plan, twice, halts the
 CHECKPOINT = "after_first_search"
 SOURCE = re.compile(r"^src/(?!i18n/).+\.tsx?$")   # code, not documentation or translations
 CONTEXT_CHARS = 6000  # of each earlier result, in a fill call
+DURABILITY = "sync"   # the run's durability mode, set once for the run (Part A, task 4)
 
 
 def role(name: str | None) -> str | None:
@@ -83,12 +85,20 @@ def allows_null(spec: dict) -> bool:
 
 
 def run(ctx) -> None:
-    plan = plan_until_valid(ctx)
-    if plan is None:
-        return
-    ctx.trace.plan(1, plan)
-    Executor(ctx, plan).run()
-
+    checkpointer = Checkpointer()
+    saved = checkpointer.last(ctx.run_id)    # None for a fresh run, and for a run that crashed before its first save
+    if saved is None:
+        plan = plan_until_valid(ctx)
+        if plan is None:
+            return
+        ctx.trace.plan(1, plan)
+        executor = Executor(ctx, plan, checkpointer)
+    else:
+        executor = Executor.from_checkpoint(ctx, saved, checkpointer)
+    try:
+        executor.run()
+    finally:
+        checkpointer.close()                 # a kill -9 skips this: only sync checkpoints survive one
 
 def schema_check(ctx, plan: dict, version: int) -> list[dict]:
     """The plan as the planner's tool returned it, against agent/plan_schema.json. A
@@ -127,7 +137,7 @@ def plan_until_valid(ctx) -> dict | None:
 class Executor:
     critique = True   # the notes way turns the second pass off
 
-    def __init__(self, ctx, plan: dict):
+    def __init__(self, ctx, plan: dict, checkpointer: Checkpointer | None = None):
         self.ctx = ctx
         self.plan = copy.deepcopy(plan)
         self.version = 1
@@ -137,6 +147,42 @@ class Executor:
         self.revisions = 0
         self.revised: set[str] = set()   # ids of steps a revision added or changed: the checkpoint follows them
         self.ran: set[str] = set()       # ids of steps that ran and are not to run again
+        self.completed: list[dict] = []        # every tool call that returned: {step, tool, args, key, result}
+        self.findings: dict = {}               # what the run has established: label, file, the writes' arguments
+        self.checkpointer = checkpointer or Checkpointer()   # Part A: the run's saves, on disk
+        self.resuming: str | None = None       # Part B: the id of the step the checkpoint left running
+
+    @classmethod
+    def from_checkpoint(cls, ctx, saved: dict, checkpointer: Checkpointer) -> "Executor":
+        """A resume (Part B): the executor as the run's last checkpoint left it."""
+        executor = cls(ctx, saved["plan"], checkpointer)
+        executor.restore(saved)
+        return executor
+
+    def restore(self, saved: dict) -> None:
+        """Rebuild what the run knew from a checkpoint. A finished step is recorded again from
+        its saved result, so it is skipped and its output is there for the later calls; the
+        step that was running is not, so run() comes to it next."""
+        steps = {str(s.get("id")): s for s in self.plan.get("steps") or []}
+        for entry in saved["completed_calls"]:
+            step = steps.get(str(entry["step"]))
+            if step is None:
+                continue
+            result = ToolResult(entry["result"]["content"], entry["result"]["is_error"], 0.0, entry["key"])
+            self.record(step, entry["args"], result)
+            self.completed.append(entry)
+        for step_id, status in saved["step_status"].items():
+            if status == "skipped" and step_id in steps:       # the PR step, when the draft said file: none
+                self.record(steps[step_id], step_args(steps[step_id]), None, "skipped")
+        self.findings = dict(saved["findings"])
+        self.calls = self.findings.get("calls", 0)
+        if self.findings.get("comment_args"):
+            self.draft = self.findings["comment_args"]
+            self.drafted_file = self.findings.get("file") or "none"
+        current = saved["current_step"]
+        self.resuming = None if current is None else str(current)
+        self.ctx.trace.event("restored", current_step=saved["current_step"],
+                             skipped=[r["id"] for r in self.results])
 
     # -- the plan, in order ------------------------------------------------------------
     def next_step(self) -> dict | None:
@@ -180,11 +226,16 @@ class Executor:
         """One tool call for a plan step; None when the registry could not confirm a
         write, and the run has ended escalated (the third exit)."""
         try:
-            return self.ctx.call_tool(self.calls, tool, args, plan_step=step.get("id"))
+            result = self.ctx.call_tool(self.calls, tool, args, plan_step=step.get("id"))
         except Unverifiable as exc:
             self.record(step, args, None, "unverifiable")
             self.ctx.trace.end("escalated", detail=f"step {step.get('id')}: {exc}; a person on review duty decides")
             return None
+        # a call that returned, for a checkpoint: a write that never ran (rejected, so no key) is not one
+        if result.key is not None or role(tool) not in ("comment", "open_pr"):
+            self.completed.append({"step": step.get("id"), "tool": tool, "args": dict(args), "key": result.key,
+                                   "result": {"content": result.content, "is_error": result.is_error}})
+        return result
 
     def filled(self, step: dict, args: dict) -> dict | None:
         to_fill = [k for k, v in args.items() if str(v).startswith(FILL)]   # "$fill", or "$fill: a note"
@@ -277,6 +328,22 @@ class Executor:
                 s["status"] = entry["status"]
         return entry
 
+    def save_checkpoint(self, step_id, *, current) -> None:
+        """Save the run's state, in the run's durability mode, then write its trace line.
+        Five fields and no conversation (checks/FORMATS.md, section 12.4). `step_id` is
+        the plan step the checkpoint belongs to; `current` the step running or about to run."""
+        status = {str(s.get("id")): s.get("status") or "pending" for s in self.plan.get("steps") or []}
+        if current is not None:
+            status[str(current)] = "running"
+        self.checkpointer.save(self.ctx.run_id, {
+            "plan": self.plan,
+            "step_status": status,
+            "completed_calls": list(self.completed),
+            "findings": {**self.findings, "calls": self.calls},
+            "current_step": current,
+        }, step=step_id, mode=DURABILITY)
+        self.ctx.trace.event("checkpoint", step=step_id, mode=DURABILITY)   # after the save: sync means on disk
+
     # -- revision, at the checkpoint whose check failed --------------------------------------
     def checkpoint(self, name: str, ok: bool) -> bool:
         """True when a new version is now active."""
@@ -321,11 +388,16 @@ class Executor:
             self.ctx.trace.end("escalated", detail=f"the draft still failed the second pass after {MAX_ROUNDS} rounds")
             return False
         self.draft = final
-        self.drafted_file = parse_triage_comment(str(final.get(arg("comment", "body"))))[1] or "none"
+        label, file = parse_triage_comment(str(final.get(arg("comment", "body"))))
+        self.drafted_file = file or "none"
+        self.findings = {"label": label or "bug", "file": self.drafted_file,
+                         "comment_args": final, "pr_args": None}
         return True
 
     def post(self, step: dict) -> bool:
         """Post the checked draft, the run's last write. False when the run has ended."""
+        if str(step.get("id")) != self.resuming:       # a resume replays from the checkpoint it loaded
+            self.save_checkpoint(step.get("id"), current=step.get("id"))   # C2: the arguments are on disk first
         result = self.call(step, step["tool"], self.draft)
         if result is None:
             return False
@@ -335,18 +407,25 @@ class Executor:
     # -- the pull request, before the comment ---------------------------------------------------
     def pull_request(self, step: dict) -> bool:
         """Open the draft PR when the comment's draft names a file; skip the step when it
-        says none. The issue and the branch are fixed here, by code. False when the run
-        has ended."""
+        says none. The issue and the branch are fixed here, by code. On a resume of this
+        step the checkpoint's arguments are used, never new ones from the model. False
+        when the run has ended."""
         if self.drafted_file in (None, "none"):
             self.record(step, step_args(step), None, "skipped")
             return True
-        number = self.ctx.issue_number
-        args = step_args(step)
-        args[arg("open_pr", "number")] = f"issue-{number}"
-        args[arg("open_pr", "branch")] = f"repomind/issue-{number}"
-        filled = self.filled(step, args)
-        if filled is None:
-            return False
+        saved = self.findings.get("pr_args")
+        if str(step.get("id")) == self.resuming and saved:
+            filled = saved                     # replayed from the checkpoint it was saved in
+        else:
+            number = self.ctx.issue_number
+            args = step_args(step)
+            args[arg("open_pr", "number")] = f"issue-{number}"
+            args[arg("open_pr", "branch")] = f"repomind/issue-{number}"
+            filled = self.filled(step, args)
+            if filled is None:
+                return False
+            self.findings["pr_args"] = filled
+            self.save_checkpoint(step.get("id"), current=step.get("id"))   # C1: the arguments are on disk first
         result = self.call(step, step["tool"], filled)
         if result is None:
             return False

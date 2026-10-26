@@ -1,26 +1,179 @@
 {
   "plan_marks": [
-  {"step": 1, "kind": "read",        "checkpoint": "none"},
-  {"step": 2, "kind": "read",        "checkpoint": "none"},
-  {"step": 3, "kind": "read",        "checkpoint": "none"},
-  {"step": 4, "kind": "read",        "checkpoint": "none"},
-  {"step": 5, "kind": "keyed_write", "checkpoint": "before"},
-  {"step": 6, "kind": "keyed_write", "checkpoint": "before"}
-],
+    {
+      "step": 1,
+      "kind": "read",
+      "checkpoint": "none"
+    },
+    {
+      "step": 2,
+      "kind": "read",
+      "checkpoint": "none"
+    },
+    {
+      "step": 3,
+      "kind": "read",
+      "checkpoint": "none"
+    },
+    {
+      "step": 4,
+      "kind": "read",
+      "checkpoint": "none"
+    },
+    {
+      "step": 5,
+      "kind": "keyed_write",
+      "checkpoint": "before"
+    },
+    {
+      "step": 6,
+      "kind": "keyed_write",
+      "checkpoint": "before"
+    }
+  ],
   "durability": "sync",
   "uncrashed_run_id": "planned-4201-s01-6407ec",
-  "matrix_derived": [],
+  "matrix_derived": [
+    {
+      "run_id": "planned-4201-s01-f1573f",
+      "step": 1,
+      "when": "after",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    {
+      "run_id": "planned-4201-s01-346cf9",
+      "step": 1,
+      "when": "during",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    {
+      "run_id": "planned-4201-s01-26d9a7",
+      "step": 2,
+      "when": "after",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    {
+      "run_id": "planned-4201-s01-6786d8",
+      "step": 2,
+      "when": "during",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    {
+      "run_id": "planned-4201-s01-57f146",
+      "step": 3,
+      "when": "after",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    {
+      "run_id": "planned-4201-s01-229589",
+      "step": 3,
+      "when": "during",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    {
+      "run_id": "planned-4201-s01-ecf6b4",
+      "step": 4,
+      "when": "after",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    {
+      "run_id": "planned-4201-s01-13c2cb",
+      "step": 4,
+      "when": "during",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    {
+      "run_id": "planned-4201-s01-1b3aae",
+      "step": 5,
+      "when": "after",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    {
+      "run_id": "planned-4201-s01-0b2471",
+      "step": 5,
+      "when": "during",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    {
+      "run_id": "planned-4201-s01-f39606",
+      "step": 6,
+      "when": "after",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    },
+    {
+      "run_id": "planned-4201-s01-1fe0f0",
+      "step": 6,
+      "when": "during",
+      "comments": 1,
+      "open_prs": 1,
+      "matches": true
+    }
+  ],
   "matrix_uuid": [],
   "duplicate_comment_ids": {},
   "reopened": {
-    "with_store": {"runs": 0, "passes": 0, "mean_tool_calls": null, "mean_tokens": null, "run_ids": []},
-    "empty_store": {"runs": 0, "passes": 0, "mean_tool_calls": null, "mean_tokens": null, "run_ids": []}
+    "with_store": {
+      "runs": 0,
+      "passes": 0,
+      "mean_tool_calls": null,
+      "mean_tokens": null,
+      "run_ids": []
+    },
+    "empty_store": {
+      "runs": 0,
+      "passes": 0,
+      "mean_tool_calls": null,
+      "mean_tokens": null,
+      "run_ids": []
+    }
   },
-  "checkpoint_bytes": {"structured": null, "with_conversation": null, "runs": 0},
+  "checkpoint_bytes": {
+    "structured": null,
+    "with_conversation": null,
+    "runs": 0
+  },
   "contradiction_test": [],
   "forgetting": {
-    "attention": {"fact": null, "effect": {}, "lost": null, "fixed": null},
-    "compaction": {"fact": null, "effect": {}, "lost": null, "fixed": null},
-    "session": {"fact": null, "effect": {}, "stated": null, "lost": null, "fixed": null}
+    "attention": {
+      "fact": null,
+      "effect": {},
+      "lost": null,
+      "fixed": null
+    },
+    "compaction": {
+      "fact": null,
+      "effect": {},
+      "lost": null,
+      "fixed": null
+    },
+    "session": {
+      "fact": null,
+      "effect": {},
+      "stated": null,
+      "lost": null,
+      "fixed": null
+    }
   }
 }

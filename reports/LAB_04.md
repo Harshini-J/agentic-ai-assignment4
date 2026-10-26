@@ -1,6 +1,6 @@
 # Assignment 4 · Kill it and resume: state, keys and a memory with provenance
 
-Model: <vendor and model>, the same for every run.
+Model: Anthropic, claude-sonnet-5, the same for every run.
 
 ## Part A · Mark the plan, place the checkpoints
 
@@ -16,7 +16,7 @@ Model: <vendor and model>, the same for every run.
 
 The plan is the uncrashed run's (`planned-4201-s01-6407ec`): the model planned two searches, for a key term and an alternate one, so it has six steps.
 
-Checkpoints are placed according to the type of each step rather than at fixed time intervals. Each write has a sync checkpoint immediately before execution: C1 before the PR creation (step 5) and C2 before the comment creation (step 6). Each checkpoint stores the exact arguments that will be sent to the write operation. Since the key is generated from these model-provided arguments, replay is safe only when the same arguments are used, and they must be saved to disk before the write executes. This design ensures that at most one write operation, the currently running one, is within the replay window. The four read operations do not require checkpoints because they are local, have no side effects, and can safely be repeated. As a result, a crash before C1 costs only a new plan and three fill calls (model calls). The resumed run may select a different file, which is acceptable. Overall, checkpoint placement limits the replay window to the currently executing step. However, whether a write killed during its own step actually happened must be determined using its key and, for the PR operation, its branch, rather than the checkpoint itself.
+Checkpoints are placed according to the type of each step rather than at fixed time intervals. Each write has a sync checkpoint immediately before execution: C1 before the PR creation (step 5) and C2 before the comment creation (step 6). Each checkpoint stores the exact arguments that will be sent to the write operation. Since the key is generated from these model-provided arguments, replay is safe only when the same arguments are used, and they must be saved to disk before the write executes. This design ensures that at most one write operation, the currently running one, is within the replay window. The four read operations do not require checkpoints because they are local, have no side effects, and can safely be repeated. As a result, a crash before C1 costs a restart: a new plan, the reads again and a new draft, about 14k tokens in the matrix against 17k for the uncrashed run, because nothing before the first write is saved. The resumed run may select a different file, which is acceptable. Overall, checkpoint placement limits the replay window to the currently executing step. However, whether a write killed during its own step actually happened must be determined using its key and, for the PR operation, its branch, rather than the checkpoint itself.
 
 - Durability mode, and why: **sync**
 
@@ -47,10 +47,24 @@ The comment is the weaker of the two writes. It has one defence against duplicat
 - **Entire matrix with random keys:** Duplicate comments occur only for crashes during or after step 6. At step 5, the PR is replayed with a new key, but the branch-based check finds the existing open PR and prevents a duplicate. The comment is then posted once. For crashes at steps 1 to 4, no write has occurred before the crash, so the restarted run posts the comment only once.
 - **Plans may differ:** A crashed run's model may plan five steps (one search) instead of six; then step 5 is the comment in that run, and a kill at step 6 does not fire and is run again.
 
-**The matrix, derived keys.** Uncrashed run:
+**The matrix, derived keys.** Uncrashed run: `planned-4201-s01-6407ec` (six steps).
 
-| Step | When | run_id | Comments | Open PRs | Matches its findings |
-|---|---|---|---|---|---|
+| Step | When | run_id | Kill landed on | Plan steps | Comments | Open PRs | Matches its findings | Resume tokens |
+|---|---|---|---|---|---|---|---|---|
+| 1 | after | planned-4201-s01-f1573f | issues_read | 5 | 1 | 1 | yes | 14,318 |
+| 1 | during | planned-4201-s01-346cf9 | issues_read | 6 | 1 | 1 | yes | 13,835 |
+| 2 | after | planned-4201-s01-26d9a7 | code_search | 5 | 1 | 1 | yes | 14,151 |
+| 2 | during | planned-4201-s01-6786d8 | code_search | 5 | 1 | 1 | yes | 13,808 |
+| 3 | after | planned-4201-s01-57f146 | code_read_file | 5 | 1 | 1 | yes | 13,908 |
+| 3 | during | planned-4201-s01-229589 | code_read_file | 5 | 1 | 1 | yes | 13,861 |
+| 4 | after | planned-4201-s01-ecf6b4 | pulls_open | 5 | 1 | 1 | yes | 0 |
+| 4 | during | planned-4201-s01-13c2cb | pulls_open | 5 | 1 | 1 | yes | 0 |
+| 5 | after | planned-4201-s01-1b3aae | issues_comment | 5 | 1 | 1 | yes | 0 |
+| 5 | during | planned-4201-s01-0b2471 | pulls_open | 6 | 1 | 1 | yes | 0 |
+| 6 | after | planned-4201-s01-f39606 | issues_comment | 6 | 1 | 1 | yes | 0 |
+| 6 | during | planned-4201-s01-1fe0f0 | issues_comment | 6 | 1 | 1 | yes | 0 |
+
+Every case left exactly one comment on issue 4201 and one open PR from `repomind/issue-4201`, as verified by reading the tracker using `run_id`. Each comment contained the label and file recorded in its run's last checkpoint (`bug`, `src/notifications/templates.ts`). No resumed run repeated a tool call that had completed before its last checkpoint.  The plans varied: eight of the twelve crashed runs had five steps, including one search, so step 4 was the PR operation and step 5 was the comment operation in those runs, and four had six steps. The "kill landed on" column identifies the tool affected by each kill. A kill at step 6 does not fire on a five-step plan, so those cases were run again until a six-step plan was killed; the four attempts whose kill did not fire finished uncrashed and are not cases: `planned-4201-s01-6eb035`, `planned-4201-s01-c470a7`, `planned-4201-s01-62e9e2` and `planned-4201-s01-41e06a`. Crashes on a read, after or during, had no checkpoint to resume from, so the run restarted and consumed approximately another full run's worth of tokens. In contrast, crashes on a write, after or during, resumed from C1 or C2 without additional model calls. The writes interrupted during their own execution (`planned-4201-s01-13c2cb` and `planned-4201-s01-0b2471` for the PR, and `planned-4201-s01-1fe0f0` for the comment) had already been committed before the process was terminated. During replay, the saved arguments produced the same keys; the check before execute found the existing comment by its key and the existing PR by its branch, and wrote nothing.
 
 ## Part C · Break it on purpose
 
