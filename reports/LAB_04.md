@@ -97,21 +97,34 @@ Both matrices crashed at the same steps and resumed from the same checkpoints, C
 ## Part D · A memory that can say where it came from
 
 - The write policy, in brief:
+
+The store is shared memory across runs, while a checkpoint holds one run's exact state. The policy (`state/write_policy.md`) was written first. A record is saved at the end of a `completed` run or when a claim is verified; runs that escalate or crash save nothing. The store keeps information that was expensive to derive, stated by a person with standing, or checked against the repository, but excludes guesses, drafts, and raw tool output. Repeated records are merged, while changed facts require `supersede`, which keeps the old record inactive. A source of lower standing cannot replace one of higher standing. Every record includes its source, `written_at`, origin, confirmation status, and kind, plus `stated_by` for a person's statement. The store rejects records that violate the rules, including treating issue text as confirmed or semantic. Runs retrieve records before their first search and log the read as `store_read`. Records whose source is `issue:<n>` are excluded from model calls. A maintainer's rule guides triage, while RepoMind's own work is treated as a lead to verify. No record authorises merging or closing an issue.
+
 - The three candidates, and how each was stored:
 
 | Candidate | Stored? | Kind | source | origin | confirmed | Invites |
 |---|---|---|---|---|---|---|
-| A | | | | | | |
-| B | | | | | | |
-| C | | | | | | |
+| A | Yes, record 1, written_at 2026-10-02T14:12:09Z (when the run worked it out) | procedural | `memory` | derived | true: checked against `package.json`, the README and `config/app.yaml` | Staleness: it is true until the repository changes, and nothing in the store notices when it does |
+| B | Yes, record 2, written_at 2026-09-30T08:41:37Z, as a record that the issue said it | episodic | `issue:4188`, stated by `tk-dev-91` | ingested | false | Poisoning: it is text anyone can write, and it claims a maintainer approved auto-merging |
+| C | Yes, record 3, written_at 2026-09-21T16:05:52Z, in the maintainer's own words with a note of who said it and where | procedural | `user`, stated by `priya-s` | ingested | true: a person with standing, named by the discussion header, said it | Contradiction: a maintainer can change the rule later, and the old one must not stay active beside the new one |
+
+Standing comes from the discussion header, never from a record's own claims. Candidate C says it was a comment on issue 4185, which is not among the fixtures, so the only evidence of standing is the header `### priya-s (maintainer)` in issue 4207's discussion (2026-08-19 and 2026-10-12). Record 2 never reaches a model call and can never be confirmed. A and C apply to the whole repository.
 
 - Eviction: the size, the rule, and how long an entry lives at your write rate:
 
+Expiry on access, by source: `Store.evict()` runs before the first read of each fresh run, and any `memory` or `issue:<n>` record more than 90 days past its `written_at` becomes inactive and receives an `evicted_at` timestamp. Records from `user` and `repo` never expire; only a person can supersede them. The store allows at most 2,000 active records, with the oldest `memory` and `issue:<n>` records evicted first. Nothing is deleted. The 90-day period exceeds the longest gap RepoMind must remember, which is 54 days (issue 4207 was closed on 2026-08-19 and reopened on 2026-10-12). The measured write rate is at most one record per run: the seed run increased the store from 3 records to 4, while the five later runs merged the same decision and added none. At an assumed rate of 20 runs per day, the cap would fill in 100 days, so the 90-day expiry applies first and an entry lives for 90 days. The cap becomes the limiting factor only above approximately 37 runs per day (2,000 / 54). One trade-off is that a merged decision retains its original `written_at`, so it expires 90 days after its first write, and the next run writes it again.
+
 | Issue 4207, five runs each | With the store | Empty store |
 |---|---|---|
-| Passes | | |
-| Mean tool calls | | |
-| Mean tokens | | |
+| Passes | 5 of 5 | 5 of 5 |
+| Mean tool calls | 5.2 | 5.8 |
+| Mean tokens | 21,613 | 24,587 |
+
+The seed run (`planned-4207-s01-ae94d9`, not one of the ten) left a decision for 4207 in the store: label bug, file `src/export/scheduler.ts`. Store runs used the real store (`REPOMIND_STORE` unset); empty-store runs used `REPOMIND_STORE=off`. Success is `check()` from Assignment 1, read from the tracker by run ID.
+
+The store did not affect correctness: 5 of 5 passed in both sets. Store runs made 26 tool calls (one plan searched twice) and no revisions; empty-store runs made 29, with three revisions in two runs, the costly ones (25,511 and 41,823 tokens). The other three empty runs cost about 18,500 tokens, less than the store runs (20,100–21,500, and 25,701), so the store's lower mean comes from those outliers. Five runs per set cannot show that the store prevented the revisions.
+
+Every store run read records 1, 3 and 4 before its first search, then read `scheduler.ts` itself: the file came from the repository, and the decision record was only a lead. In the empty set, four runs read `scheduler.ts` and one named it from a search result without opening it; its store was off, so not from memory. The five store runs merged into record 4.
 
 ## Part E · Answer from your own runs
 
