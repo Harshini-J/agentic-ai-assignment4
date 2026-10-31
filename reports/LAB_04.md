@@ -162,14 +162,53 @@ The design: a graph of planned steps in my own harness, with disk checkpoints, a
 
 The fact, word for word, and what the comment states when a run uses it:
 
+"Ledgerline's maintainers label every report about the Export button `feature`: they plan its fixes on the feature board." A run that uses it states `label: feature`; without it, 4192's comment states `label: bug`.
+
 | Case | The lost run | Where it lost the fact (trace and request record) | The fix | The fixed run |
 |---|---|---|---|---|
-| Attention | | | | |
-| Compaction | | | | |
-| The session | | | | |
+| Attention | `planned-4192-s01-97b0f5` | The drafting call (request 4) received the fact as a plain line at 49% of 70,407 characters, 34,555 characters from the nearer end, among 22 unrelated files. It was sent but unused: `bug`. | A more prominent place, in a shorter context: the start of the system prompt, with its precedence stated, and no filler files. | `planned-4192-s01-235178`: the drafting call (request 8) has it 95 characters from the start in a 6,371-character request; `feature`. |
+| Compaction | `planned-4192-s01-30474c` | Requests 2, 4, 6, and 7 received the fact as the first turn in the history. The `compaction` at trace line 22 (counted from 1; 836 tokens, threshold 300; 4 turns summarized) retained only tools and paths, so the drafting call (request 9) did not receive it: `bug`. | Keep a structured note outside the conversation rather than increasing the context window. | `planned-4192-s01-050b8a`: the same compaction occurred (trace line 17, counted from 1), but the drafting call (request 7) includes the note at 5%; `feature`. |
+| The session | `planned-4192-s01-a9b2a7` | The store was empty (`REPOMIND_STORE=off`), so none of its nine requests received the fact: `bug`. | A store (Part D's), not a bigger window. | `planned-4192-s01-877cf2`: `store_read` returned records 1, 5, and 7 before the first search. The drafting call (request 4) includes record 7, the rule; `feature`. |
 
-The session case's stated run:
+Putting the note at the end of the request did not solve the attention problem: the drafting calls of `planned-4192-s01-8715af` (plain wording) and `planned-4192-s01-6440c1` (with precedence stated) held it zero characters from the end, yet both comments still stated `bug`. The successful fix changed placement and wording together, so I cannot determine which change made the difference. Two filler file names were evaluation answers; I replaced them and reran the lost run identified above. For restart recovery, the fix is Part B's checkpoint: all 24 crashed cases completed in a new process, and with derived keys, none repeated a call that had completed before its last checkpoint.
+
+The session case's stated run: `planned-4191-s01-f16edf`, which received the fact in every fill call's system prompt. At the end, it stored record 7, the rule word for word (source `user`, stated by `priya-s`, confirmed, `written_at` 2026-10-27T00:32:06Z), along with record 6, its own triage for issue 4191. Because that triage belongs to 4191, the fixed run's read for 4192 returned records 1, 5 and 7: the rule, not the stated run's triage. The memory heading now specifies that a maintainer's rule must be followed and takes precedence over the label definitions; I did not test the weaker wording.
 
 ## AI assistance
 
 Which tool, what it wrote, and what you checked.
+
+AI tools: Anthropic Claude Code, Github Copilot
+
+Date: 25 - 30 October 2026
+
+Understanding the existing codebase: Claude Code helped me read the starter before I changed it: how `ways/planned.py` runs a plan and where its writes happen (the PR, then the comment), how `run.py` kills a run with `--die-after-step` and `--die-during-step` and restarts it with `--resume`, how `KEY_MODE` changes the idempotency key, what the request record (`runs/<id>.requests.jsonl`) holds and how `harness.formats.request_text` and `squeeze` read it, and where each format is defined in `checks/FORMATS.md` (sections 12.4 and 12.11).
+
+I used it to explain parts of the assignment I didn't understand.
+
+- **Part A:** what a checkpoint must hold to resume (and why not the conversation), where to place it by step type, and what the durability modes (sync, async, exit) survive.
+- **Part B:** how a resume replays from the last checkpoint with the saved write arguments, so the key is the same, and how to predict each crash case by hand before running it.
+- **Part C:** why random keys duplicate a write on replay, and how to read the duplicates from the tracker, not the traces.
+- **Part D:** what may enter a store, provenance fields, merge against supersede, standing, and an eviction rule sized to the longest gap (54 days).
+- **Part E:** what each question asks, and how to answer from my own runs.
+- **Part F:** the three boundaries (attention, compaction, session), and how the checker finds the drafting call and decides whether it was sent the fact.
+
+**What it wrote:**
+
+- Claude Code: drafts of the changes to `ways/planned.py`: the checkpoint calls (C1 before the PR, C2 before the comment), resume, the store read and write, and Part F's switches (`REPOMIND_NOTE`, `REPOMIND_COMPACT`), the compaction with its prompt and the pinned note, and the stored maintainer's rule. I compared them with my own versions, chose between them, and combined the two for the compaction.
+- Claude Code: reviews of my `state/checkpointer.py` and `state/store.py`, with suggested fixes.
+- Claude Code: the layout of `state/write_policy.md`; the content is mine.
+- Claude Code: `eval/checkpoint_bytes.py`; the off-mode guard in `eval/store_retrieve.py`; the tracker lines in my `eval/forgetting.py`.
+- Claude Code: one-off read-only commands and scratch scripts, kept outside the repository, to read traces, request records, the store and the tracker.
+- Claude Code: drafts and reviews of `reports/LAB_04.md` text, which I edited and shortened; the `ARCHITECTURE.md` rows and their `file:line` references; the `CHANGES.md` entry, which I rewrote.
+- Claude Code: drafts of eval/crash_matrix.py and tests/test_memory.py, which I edited and ran.
+- GitHub Copilot: inline autocomplete suggestions while I was coding
+
+**What I checked:**
+
+- **`ways/planned.py`:** every change was first tested on a scratch copy with the scripted model, then `make test` passed (101 tests). Real-model runs on 4191 and 4192 for each Part F case, each read with `eval/forgetting.py`.
+- **Checkpoints and resume:** walked the crash matrix by hand before running it (the hand walk predicted the mechanism but missed the step numbers; the runs corrected them), then counted each case's comments and PRs from the tracker; the derived-key and random-key matrices are in `LAB_04.json`.
+- **The store:** printed its records after each session run (record 7 holds the fact word for word, source `user`, stated by `priya-s`), and checked `store_read` in each trace.
+- **Part F:** checked each run against the checker's rules in section 12.11 (the drafting call, where the fact sat, the compaction line, the record the store brought back). When the checker flagged two filler file names as evaluation answers, I replaced them and reran the lost attention run.
+- **Autocomplete suggestions:** checked every suggestion by hand before keeping it.
+- **`ARCHITECTURE.md`:** opened every `file:line` reference and checked it lands on the line its row describes.
