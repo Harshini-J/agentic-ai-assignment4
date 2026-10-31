@@ -178,7 +178,7 @@ The session case's stated run: `planned-4191-s01-f16edf`, which received the fac
 
 Which tool, what it wrote, and what you checked.
 
-AI tools: Anthropic Claude Code, Github Copilot
+AI tools: Anthropic Claude Code, GitHub Copilot
 
 Date: 25 - 30 October 2026
 
@@ -197,11 +197,11 @@ I used it to explain parts of the assignment I didn't understand.
 
 - Claude Code: drafts of the changes to `ways/planned.py`: the checkpoint calls (C1 before the PR, C2 before the comment), resume, the store read and write, and Part F's switches (`REPOMIND_NOTE`, `REPOMIND_COMPACT`), the compaction with its prompt and the pinned note, and the stored maintainer's rule. I compared them with my own versions, chose between them, and combined the two for the compaction.
 - Claude Code: reviews of my `state/checkpointer.py` and `state/store.py`, with suggested fixes.
-- Claude Code: the layout of `state/write_policy.md`; the content is mine.
+- Claude Code: a draft of `state/write_policy.md`, which I edited, and its layout.
 - Claude Code: `eval/checkpoint_bytes.py`; the off-mode guard in `eval/store_retrieve.py`; the tracker lines in my `eval/forgetting.py`.
 - Claude Code: one-off read-only commands and scratch scripts, kept outside the repository, to read traces, request records, the store and the tracker.
 - Claude Code: drafts and reviews of `reports/LAB_04.md` text, which I edited and shortened; the `ARCHITECTURE.md` rows and their `file:line` references; the `CHANGES.md` entry, which I rewrote.
-- Claude Code: drafts of eval/crash_matrix.py and tests/test_memory.py, which I edited and ran.
+- Claude Code: drafts of `eval/crash_matrix.py`, `eval/store_candidates.py`, `eval/store_contradiction.py`, `tests/test_memory.py` and `tests/test_store.py`, which I edited and ran.
 - GitHub Copilot: inline autocomplete suggestions while I was coding
 
 **What I checked:**
@@ -210,5 +210,6 @@ I used it to explain parts of the assignment I didn't understand.
 - **Checkpoints and resume:** walked the crash matrix by hand before running it (the hand walk predicted the mechanism but missed the step numbers; the runs corrected them), then counted each case's comments and PRs from the tracker; the derived-key and random-key matrices are in `LAB_04.json`.
 - **The store:** printed its records after each session run (record 7 holds the fact word for word, source `user`, stated by `priya-s`), and checked `store_read` in each trace.
 - **Part F:** checked each run against the checker's rules in section 12.11 (the drafting call, where the fact sat, the compaction line, the record the store brought back). When the checker flagged two filler file names as evaluation answers, I replaced them and reran the lost attention run.
+- `LAB_04.json` and the matrix files: filled in from my own runs; I checked every number against the tracker, the traces and `make check-04` (82 / 82, no integrity flags).
 - **Autocomplete suggestions:** checked every suggestion by hand before keeping it.
 - **`ARCHITECTURE.md`:** opened every `file:line` reference and checked it lands on the line its row describes.
